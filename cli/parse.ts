@@ -6,7 +6,13 @@ import { LiteParse } from "../src/core/parser.js";
 import { LiteParseConfig, OutputFormat } from "../src/core/types.js";
 import { performance } from "perf_hooks";
 
-/** Options for the parse command */
+const DEFAULT_MAX_PAGES = 10000;
+const DEFAULT_DPI = 150;
+const DEFAULT_LANGUAGE = "en";
+const DEFAULT_OUTPUT_FORMAT = "text";
+const DEFAULT_SCREENSHOT_FORMAT = "png";
+const DEFAULT_SCREENSHOT_DIR = "./screenshots";
+
 interface ParseCommandOptions {
   output?: string;
   format?: string;
@@ -24,7 +30,6 @@ interface ParseCommandOptions {
   quiet?: boolean;
 }
 
-/** Options for the screenshot command */
 interface ScreenshotCommandOptions {
   outputDir?: string;
   pages?: string;
@@ -34,7 +39,6 @@ interface ScreenshotCommandOptions {
   quiet?: boolean;
 }
 
-/** Options for the batch-parse command */
 interface BatchParseCommandOptions {
   format?: string;
   ocrServerUrl?: string;
@@ -61,13 +65,13 @@ program
   .command("parse <file>")
   .description("Parse a document file (PDF, DOCX, XLSX, PPTX, images, etc.)")
   .option("-o, --output <file>", "Output file path")
-  .option("--format <format>", "Output format: json|text", "text")
+  .option("--format <format>", "Output format: json|text", DEFAULT_OUTPUT_FORMAT)
   .option("--ocr-server-url <url>", "HTTP OCR server URL (uses Tesseract if not provided)")
   .option("--no-ocr", "Disable OCR")
-  .option("--ocr-language <lang>", "OCR language(s)", "en")
-  .option("--max-pages <n>", "Max pages to parse", "1000")
+  .option("--ocr-language <lang>", "OCR language(s)", DEFAULT_LANGUAGE)
+  .option("--max-pages <n>", "Max pages to parse", DEFAULT_MAX_PAGES.toString())
   .option("--target-pages <pages>", 'Target pages (e.g., "1-5,10,15-20")')
-  .option("--dpi <dpi>", "DPI for rendering", "150")
+  .option("--dpi <dpi>", "DPI for rendering", DEFAULT_DPI.toString())
   .option("--no-tables", "Disable table detection")
   .option("--no-precise-bbox", "Disable precise bounding boxes")
   .option("--skip-diagonal-text", "Skip diagonal text")
@@ -103,9 +107,9 @@ program
         ocrEnabled: options.ocr !== false,
         ocrServerUrl: options.ocrServerUrl,
         ocrLanguage: options.ocrLanguage,
-        maxPages: parseInt(options.maxPages || "1000"),
+        maxPages: parseInt(options.maxPages || DEFAULT_MAX_PAGES.toString()),
         targetPages: options.targetPages,
-        dpi: parseInt(options.dpi || "150"),
+        dpi: parseInt(options.dpi || DEFAULT_DPI.toString()),
         tableDetection: options.tables !== false,
         preciseBoundingBox: options.preciseBbox !== false,
         skipDiagonalText: options.skipDiagonalText || false,
@@ -154,10 +158,10 @@ program
 program
   .command("screenshot <file>")
   .description("Generate screenshots of PDF pages")
-  .option("-o, --output-dir <dir>", "Output directory for screenshots", "./screenshots")
+  .option("-o, --output-dir <dir>", "Output directory for screenshots", DEFAULT_SCREENSHOT_DIR)
   .option("--pages <pages>", 'Page numbers to screenshot (e.g., "1,3,5" or "1-5")')
-  .option("--dpi <dpi>", "DPI for rendering", "150")
-  .option("--format <format>", "Image format: png|jpg", "png")
+  .option("--dpi <dpi>", "DPI for rendering", DEFAULT_DPI.toString())
+  .option("--format <format>", "Image format: png|jpg", DEFAULT_SCREENSHOT_FORMAT)
   .option("--config <file>", "Config file (JSON)")
   .option("-q, --quiet", "Suppress progress output")
   .action(async (file: string, options: ScreenshotCommandOptions) => {
@@ -185,7 +189,7 @@ program
       // Override with CLI options
       config = {
         ...config,
-        dpi: parseInt(options.dpi || "150"),
+        dpi: parseInt(options.dpi || DEFAULT_DPI.toString()),
       };
 
       // Parse target pages
@@ -194,7 +198,7 @@ program
         pageNumbers = parsePageNumbers(options.pages);
       }
 
-      const outputDir = options.outputDir || "./screenshots";
+      const outputDir = options.outputDir || DEFAULT_SCREENSHOT_DIR;
 
       // Create output directory
       if (!existsSync(outputDir)) {
@@ -209,7 +213,7 @@ program
 
       // Save screenshots
       for (const result of results) {
-        const filename = `page_${result.pageNum}.${options.format || "png"}`;
+        const filename = `page_${result.pageNum}.${options.format || DEFAULT_SCREENSHOT_FORMAT}`;
         const filepath = `${outputDir}/${filename}`;
         await fs.writeFile(filepath, result.imageBuffer);
         if (!quiet) {
@@ -276,12 +280,12 @@ const SUPPORTED_EXTENSIONS = new Set([
 program
   .command("batch-parse <input-dir> <output-dir>")
   .description("Parse multiple documents in batch mode")
-  .option("--format <format>", "Output format: json|text", "text")
+  .option("--format <format>", "Output format: json|text", DEFAULT_OUTPUT_FORMAT)
   .option("--ocr-server-url <url>", "HTTP OCR server URL (uses Tesseract if not provided)")
   .option("--no-ocr", "Disable OCR")
-  .option("--ocr-language <lang>", "OCR language(s)", "en")
-  .option("--max-pages <n>", "Max pages to parse per file", "1000")
-  .option("--dpi <dpi>", "DPI for rendering", "150")
+  .option("--ocr-language <lang>", "OCR language(s)", DEFAULT_LANGUAGE)
+  .option("--max-pages <n>", "Max pages to parse per file", DEFAULT_MAX_PAGES.toString())
+  .option("--dpi <dpi>", "DPI for rendering", DEFAULT_DPI.toString())
   .option("--no-tables", "Disable table detection")
   .option("--no-precise-bbox", "Disable precise bounding boxes")
   .option("--recursive", "Recursively search input directory")
@@ -340,8 +344,8 @@ program
         ocrEnabled: options.ocr !== false,
         ocrServerUrl: options.ocrServerUrl,
         ocrLanguage: options.ocrLanguage,
-        maxPages: parseInt(options.maxPages || "1000"),
-        dpi: parseInt(options.dpi || "150"),
+        maxPages: parseInt(options.maxPages || DEFAULT_MAX_PAGES.toString()),
+        dpi: parseInt(options.dpi || DEFAULT_DPI.toString()),
         tableDetection: options.tables !== false,
         preciseBoundingBox: options.preciseBbox !== false,
       };
