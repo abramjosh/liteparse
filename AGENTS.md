@@ -121,6 +121,10 @@ Currently tested via manual verification with sample documents. The project woul
 
 ## Related Documentation
 
+These files are key to understanding the codebase and should be referenced for specific implementation details.
+
+If changes to the codebase are being made, please update the relevant documentation files to reflect those changes and keep them up to date.
+
 - [User-facing documentation](README.md)
 - [src/conversion/README.md](src/conversion/README.md) - Format conversion details
 - [src/core/README.md](src/core/README.md) - Core architecture and configuration
