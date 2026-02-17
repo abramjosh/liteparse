@@ -9,6 +9,7 @@ sea-prep.blob
 sea-config.json
 
 # Environment
+*claude*
 .env
 .env.local
 
@@ -41,6 +42,8 @@ temp/
 *.png
 deno.json
 
-# Experimental/development artifacts
-ac/
-examples/
+# python files
+*venv*
+__pycache__
+*.pyc
+
