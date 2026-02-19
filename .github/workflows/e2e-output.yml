@@ -87,8 +87,23 @@ jobs:
               labels: ['output-changed']
             })
 
+      - name: Check for approval label (PR only)
+        id: check-approved
+        if: github.event_name == 'pull_request' && steps.compare.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            const hasApproval = labels.some(label => label.name === 'output-approved');
+            core.setOutput('has_approval', hasApproval.toString());
+            console.log(`Has output-approved label: ${hasApproval}`);
+
       - name: Require approval for output changes
-        if: steps.compare.outputs.has_changes == 'true'
+        if: steps.compare.outputs.has_changes == 'true' && github.event_name == 'pull_request' && steps.check-approved.outputs.has_approval != 'true'
         run: |
           echo "::warning::This PR changes liteparse output. Please review the comparison results."
           echo ""
@@ -98,11 +113,11 @@ jobs:
           echo "3. Re-run this workflow"
           exit 1
 
-  # This job only runs on main branch after merge
+  # This job only runs on main branch after merge when outputs changed
   upload-dataset:
     runs-on: ubuntu-latest
     needs: compare-outputs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.compare-outputs.outputs.has_changes == 'true'
 
     steps:
       - name: Checkout repository
