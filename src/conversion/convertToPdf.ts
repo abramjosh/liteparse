@@ -348,13 +348,10 @@ export async function convertToPdf(
     let pdfPath: string;
 
     if (officeExtensions.includes(extension)) {
-      console.error(`Converting office document: ${path.basename(filePath)}`);
       pdfPath = await convertOfficeDocument(filePath, tmpDir);
     } else if (spreadsheetExtensions.includes(extension)) {
-      console.error(`Converting spreadsheet: ${path.basename(filePath)}`);
       pdfPath = await convertOfficeDocument(filePath, tmpDir);
     } else if (imageExtensions.includes(extension)) {
-      console.error(`Converting image: ${path.basename(filePath)}`);
       pdfPath = await convertImageToPdf(filePath, tmpDir);
     } else {
       // Unsupported format

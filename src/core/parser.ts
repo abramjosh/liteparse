@@ -68,9 +68,6 @@ export class LiteParse {
       log(`Converted ${conversionResult.originalExtension} to PDF`);
     }
 
-    log(`Parsing PDF: ${pdfPath}`);
-    log(`Using ${this.pdfEngine.name} engine`);
-
     // Load PDF document
     const doc = await this.pdfEngine.loadDocument(pdfPath);
     log(`Loaded PDF with ${doc.numPages} pages`);
@@ -81,7 +78,6 @@ export class LiteParse {
       this.config.maxPages,
       this.config.targetPages
     );
-    log(`Extracted ${pages.length} pages`);
 
     // run BEFORE grid projection
     if (this.ocrEngine) {

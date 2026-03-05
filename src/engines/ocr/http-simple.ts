@@ -50,8 +50,6 @@ export class HttpOcrEngine implements OcrEngine {
         return [];
       }
 
-      console.warn("Got OCR results from server");
-
       return results.map((item: HttpOcrResponseItem) => ({
         text: item.text,
         bbox: item.bbox,

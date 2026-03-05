@@ -2747,7 +2747,7 @@ function info(msg) {
   }
 }
 function warn(msg) {
-  if (verbosity >= VerbosityLevel.WARNINGS) {
+  if (verbosity >= VerbosityLevel.ERRORS) {
     console.log(`Warning: ${msg}`);
   }
 }
