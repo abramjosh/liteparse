@@ -154,12 +154,3 @@ result = parser.batch_parse(
 
 print(f"Parsed {result.success_count} files in {result.total_time_seconds}s")
 ```
-
-### Quick text parsing
-
-If you just need the text and nothing else:
-
-```python
-text = parser.get_text("document.pdf")
-print(text)
-```
