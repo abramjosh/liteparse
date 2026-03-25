@@ -287,6 +287,34 @@ export interface ParsedPage {
 }
 
 /**
+ * A text element from the JSON output with position, size, and font metadata.
+ */
+export interface JsonTextItem {
+  /** The text content of this item. */
+  text: string;
+  /** X coordinate of the top-left corner, in PDF points. */
+  x: number;
+  /** Y coordinate of the top-left corner, in PDF points. */
+  y: number;
+  /** Width of the text item in PDF points. */
+  width: number;
+  /** Height of the text item in PDF points. */
+  height: number;
+  /** Font name. */
+  fontName?: string;
+  /** Font size in PDF points. */
+  fontSize?: number;
+}
+
+/**
+ * Options for {@link searchItems}.
+ */
+export interface SearchItemsOptions {
+  /** Find text items containing this phrase (case-insensitive). Matches can span multiple adjacent items. */
+  phrase: string;
+}
+
+/**
  * Structured JSON representation of parsed document data.
  * Returned when {@link LiteParseConfig.outputFormat} is `"json"`.
  */
@@ -302,15 +330,7 @@ export interface ParseResultJson {
     /** Full text content of the page. */
     text: string;
     /** Individual text elements with position and font metadata. */
-    textItems: Array<{
-      text: string;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-      fontName?: string;
-      fontSize?: number;
-    }>;
+    textItems: JsonTextItem[];
     /**
      * @deprecated Use `textItems` coordinates instead. Will be removed in v2.0.
      */

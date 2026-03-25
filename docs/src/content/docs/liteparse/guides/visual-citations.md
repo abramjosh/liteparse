@@ -72,12 +72,34 @@ function itemToPixels(item, dpi = 150) {
 
 For example, at the default 150 DPI the scale factor is `150 / 72 ≈ 2.08`, so a text item at `(72, 200)` maps to pixel `(150, 416)`.
 
-## Full example: highlighting citations with sharp
+## Searching for phrases with `searchItems`
 
-Here's a complete workflow that parses a PDF, searches for matching text, and draws yellow highlight boxes on the page screenshot:
+A single text item often contains just one word or fragment. A phrase like `"0°C to 70°C"` may span several adjacent items. The `searchItems` utility handles this — it concatenates consecutive items, finds matches, and returns merged text items with combined bounding boxes:
 
 ```typescript
-import { LiteParse } from "@llamaindex/liteparse";
+import { LiteParse, searchItems } from "@llamaindex/liteparse";
+
+const parser = new LiteParse({ outputFormat: "json" });
+const result = await parser.parse("report.pdf");
+
+for (const page of result.json.pages) {
+  const matches = searchItems(page.textItems, { phrase: "0°C to 70°C" });
+  for (const match of matches) {
+    console.log(`Found "${match.text}" at (${match.x}, ${match.y}) ${match.width}×${match.height}`);
+  }
+}
+```
+
+Each returned item has the same shape as a regular text item, with merged coordinates spanning all the items that contributed to the match.
+
+For single-word searches, iterating `textItems` individually (as shown in the library usage section above) is simpler and works fine.
+
+## Full example: highlighting citations with sharp
+
+Here's a complete workflow that parses a PDF, searches for a phrase, and draws yellow highlight boxes on the page screenshot:
+
+```typescript
+import { LiteParse, searchItems } from "@llamaindex/liteparse";
 import sharp from "sharp";
 
 const DPI = 150;
@@ -86,40 +108,36 @@ const SCALE = DPI / 72;
 async function main() {
   const parser = new LiteParse({ outputFormat: "json", dpi: DPI });
 
-  const result = await parser.parse("report.pdf");
-  const screenshots = await parser.screenshot("report.pdf");
+  const result = await parser.parse("manual.pdf");
+  const screenshots = await parser.screenshot("manual.pdf");
 
-  // Search for text items containing a query, grouped by page
-  const query = "revenue";
+  // Search for a phrase, grouped by page
+  const query = "0°C to 70°C";
   const hitsByPage = new Map<number, Array<{ x: number; y: number; width: number; height: number }>>();
 
   for (const page of result.json?.pages || []) {
-    for (const item of page.textItems) {
-      if (item.text.toLowerCase().includes(query)) {
-        if (!hitsByPage.has(page.page)) hitsByPage.set(page.page, []);
-        hitsByPage.get(page.page)!.push(item);
-      }
-    }
+    const matches = searchItems(page.textItems, { phrase: query });
+    if (matches.length) hitsByPage.set(page.page, matches);
   }
 
   // Draw all highlights per page into a single image
-  for (const [pageNum, items] of hitsByPage) {
+  for (const [pageNum, rects] of hitsByPage) {
     const shot = screenshots.find((s) => s.pageNum === pageNum);
     if (!shot) continue;
 
     const composites = await Promise.all(
-      items.map(async (item) => {
-        const rect = {
-          left: Math.round(item.x * SCALE),
-          top: Math.round(item.y * SCALE),
-          width: Math.round(item.width * SCALE),
-          height: Math.round(item.height * SCALE),
+      rects.map(async (rect) => {
+        const pixel = {
+          left: Math.round(rect.x * SCALE),
+          top: Math.round(rect.y * SCALE),
+          width: Math.round(rect.width * SCALE),
+          height: Math.round(rect.height * SCALE),
         };
 
         const overlay = await sharp({
           create: {
-            width: rect.width,
-            height: rect.height,
+            width: pixel.width,
+            height: pixel.height,
             channels: 4,
             background: { r: 255, g: 255, b: 0, alpha: 0.3 },
           },
@@ -127,7 +145,7 @@ async function main() {
           .png()
           .toBuffer();
 
-        return { input: overlay, left: rect.left, top: rect.top };
+        return { input: overlay, left: pixel.left, top: pixel.top };
       })
     );
 
@@ -137,12 +155,16 @@ async function main() {
       .toBuffer();
 
     await sharp(highlighted).toFile(`citation_page${pageNum}.png`);
-    console.log(`Saved citation_page${pageNum}.png (${items.length} highlights)`);
+    console.log(`Saved citation_page${pageNum}.png (${rects.length} highlights)`);
   }
 }
 
 main().catch(console.error);
 ```
+
+Running this script on a PDF will produce new images with the search phrase highlighted, showing exactly where the information was found on the page.
+
+![Example output showing highlighted search results on a PDF page](visual_citation.png)
 
 ## CLI usage
 
