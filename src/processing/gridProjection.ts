@@ -11,6 +11,28 @@ const FLOATING_SPACES = 2;
 // Minimum spaces between snapped columns
 const COLUMN_SPACES = 4;
 
+// --- Flowing text detection thresholds ---
+// Max total anchors (left+right+center) before block is considered structured
+const FLOWING_MAX_TOTAL_ANCHORS = 4;
+// Max left anchors before block is considered structured
+const FLOWING_MAX_LEFT_ANCHORS = 3;
+// Minimum non-empty lines required to classify a block
+const FLOWING_MIN_LINES = 3;
+// Fraction of page width a line must span to count as "wide"
+const FLOWING_WIDE_LINE_RATIO = 0.5;
+// Fraction of lines that must be wide for a block to be flowing
+const FLOWING_WIDE_LINE_THRESHOLD = 0.6;
+// Multiplier on median char width for column gap detection
+const FLOWING_COLUMN_GAP_MULTIPLIER = 4;
+// Minimum items on a line to be classified as flowing in per-line detection
+const FLOWING_MIN_LINE_ITEMS = 3;
+// Height multiplier for word-break space threshold in flowing text
+const FLOWING_SPACE_HEIGHT_RATIO = 0.15;
+// Minimum absolute space threshold in flowing text
+const FLOWING_SPACE_MIN_THRESHOLD = 0.3;
+// Maximum indent (in character widths) for flowing text
+const FLOWING_MAX_INDENT = 8;
+
 type Snap = {
   bbox: ProjectionTextBox;
   lineIndex: number;
@@ -1070,6 +1092,53 @@ function updateForwardAnchors(
 }
 
 /**
+ * Compute the maximum gap between adjacent items on a line.
+ */
+function lineMaxGap(line: ProjectionTextBox[]): number {
+  let maxGap = 0;
+  for (let gi = 1; gi < line.length; gi++) {
+    const gap = line[gi].x - (line[gi - 1].x + line[gi - 1].w);
+    if (gap > maxGap) maxGap = gap;
+  }
+  return maxGap;
+}
+
+/**
+ * Render a single line as flowing text: join items with single spaces based on gap size.
+ * Sets bbox.rendered = true for each item.
+ */
+function renderLineAsFlowingText(
+  line: ProjectionTextBox[],
+  minX: number,
+  medianWidth: number
+): string {
+  const indent = Math.min(
+    Math.max(Math.round((line[0].x - minX) / medianWidth), 0),
+    FLOWING_MAX_INDENT
+  );
+  let result = " ".repeat(indent);
+
+  for (let i = 0; i < line.length; i++) {
+    const bbox = line[i];
+    if (i > 0) {
+      const prevBbox = line[i - 1];
+      const gap = bbox.x - (prevBbox.x + prevBbox.w);
+      const spaceThreshold = Math.max(
+        bbox.h * FLOWING_SPACE_HEIGHT_RATIO,
+        FLOWING_SPACE_MIN_THRESHOLD
+      );
+      if (gap > spaceThreshold && !result.endsWith(" ")) {
+        result += " ";
+      }
+    }
+    result += bbox.str;
+    bbox.rendered = true;
+  }
+
+  return result;
+}
+
+/**
  * Classify whether a block of lines is flowing paragraph text or structured/tabular content.
  * Flowing text gets a simpler rendering path that avoids grid projection artifacts.
  */
@@ -1085,8 +1154,9 @@ function isFlowingTextBlock(
   const centerAnchorCount = Object.keys(anchorCenter).length;
 
   // Multiple column anchors indicate structured/tabular content
-  if (leftAnchorCount + rightAnchorCount + centerAnchorCount > 4) return false;
-  if (leftAnchorCount > 3) return false;
+  if (leftAnchorCount + rightAnchorCount + centerAnchorCount > FLOWING_MAX_TOTAL_ANCHORS)
+    return false;
+  if (leftAnchorCount > FLOWING_MAX_LEFT_ANCHORS) return false;
 
   // Count non-empty lines and how many span most of the page width
   let nonEmptyLines = 0;
@@ -1096,14 +1166,14 @@ function isFlowingTextBlock(
     nonEmptyLines++;
     const lineStart = line[0].x;
     const lineEnd = line[line.length - 1].x + line[line.length - 1].w;
-    if (lineEnd - lineStart > pageWidth * 0.5) wideLines++;
+    if (lineEnd - lineStart > pageWidth * FLOWING_WIDE_LINE_RATIO) wideLines++;
   }
 
   // Need enough lines to confidently classify
-  if (nonEmptyLines < 3) return false;
+  if (nonEmptyLines < FLOWING_MIN_LINES) return false;
 
   // Majority of lines should span most of page width for flowing text
-  return wideLines / nonEmptyLines > 0.6;
+  return wideLines / nonEmptyLines > FLOWING_WIDE_LINE_THRESHOLD;
 }
 
 /**
@@ -1133,26 +1203,7 @@ function renderFlowingBlock(
     }
     if (line.length === 0) continue;
 
-    // Calculate indent relative to block margin
-    const indent = Math.min(Math.max(Math.round((line[0].x - minX) / medianWidth), 0), 8);
-
-    let result = " ".repeat(indent);
-    for (let i = 0; i < line.length; i++) {
-      const bbox = line[i];
-      if (i > 0) {
-        const prevBbox = line[i - 1];
-        const gap = bbox.x - (prevBbox.x + prevBbox.w);
-        // For flowing text, any meaningful gap is a word break → single space
-        const spaceThreshold = Math.max(bbox.h * 0.15, 0.3);
-        if (gap > spaceThreshold && !result.endsWith(" ")) {
-          result += " ";
-        }
-      }
-      result += bbox.str;
-      bbox.rendered = true;
-    }
-
-    rawLines[lineIndex] = result;
+    rawLines[lineIndex] = renderLineAsFlowingText(line, minX, medianWidth);
   }
 }
 
@@ -1434,77 +1485,54 @@ export function projectToGrid(
       }
       if (blockMinX === Infinity) blockMinX = 0;
 
-      // Column gap threshold: gaps larger than ~4 character widths indicate columns
-      const columnGapThreshold = medianWidth * 4;
+      const columnGapThreshold = medianWidth * FLOWING_COLUMN_GAP_MULTIPLIER;
 
-      // Helper to compute max gap between items on a line
-      function lineMaxGap(line: ProjectionTextBox[]): number {
-        let maxGap = 0;
-        for (let gi = 1; gi < line.length; gi++) {
-          const gap = line[gi].x - (line[gi - 1].x + line[gi - 1].w);
-          if (gap > maxGap) maxGap = gap;
-        }
-        return maxGap;
-      }
-
-      // Helper to render a line as flowing text
-      function renderLineAsFlowing(lineIndex: number): void {
+      // Helper to mark and render a line as flowing
+      function markFlowing(lineIndex: number): void {
         const line = lines[lineIndex];
         if (!rawLines[lineIndex]) {
           rawLines[lineIndex] = "";
           rawLinesDelta[lineIndex] = 0;
         }
-
-        const indent = Math.min(Math.max(Math.round((line[0].x - blockMinX) / medianWidth), 0), 8);
-        let result = " ".repeat(indent);
-
-        for (let i = 0; i < line.length; i++) {
-          const bbox = line[i];
-          if (i > 0) {
-            const prevBbox = line[i - 1];
-            const gap = bbox.x - (prevBbox.x + prevBbox.w);
-            const spaceThreshold = Math.max(bbox.h * 0.15, 0.3);
-            if (gap > spaceThreshold && !result.endsWith(" ")) {
-              result += " ";
-            }
-          }
-          result += bbox.str;
-          bbox.rendered = true;
-        }
-
-        rawLines[lineIndex] = result;
+        rawLines[lineIndex] = renderLineAsFlowingText(line, blockMinX, medianWidth);
         flowingLines.add(lineIndex);
       }
 
       // First pass: detect clearly flowing lines (wide, no column gaps, enough items)
       for (let lineIndex = block.start; lineIndex < block.end; lineIndex++) {
         const line = lines[lineIndex];
-        if (line.length < 3) continue;
+        if (line.length < FLOWING_MIN_LINE_ITEMS) continue;
 
         const lineStart = line[0].x;
         const lineEnd = line[line.length - 1].x + line[line.length - 1].w;
         const lineSpan = lineEnd - lineStart;
 
-        if (lineSpan > page.width * 0.5 && lineMaxGap(line) < columnGapThreshold) {
-          renderLineAsFlowing(lineIndex);
+        if (
+          lineSpan > page.width * FLOWING_WIDE_LINE_RATIO &&
+          lineMaxGap(line) < columnGapThreshold
+        ) {
+          markFlowing(lineIndex);
         }
       }
 
-      // Second pass: extend flowing to adjacent continuation lines
-      // (short lines that follow or precede flowing lines, with no column gaps)
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (let lineIndex = block.start; lineIndex < block.end; lineIndex++) {
-          if (flowingLines.has(lineIndex)) continue;
-          const line = lines[lineIndex];
-          if (line.length === 0) continue;
-
-          const adjFlowing = flowingLines.has(lineIndex - 1) || flowingLines.has(lineIndex + 1);
-          if (adjFlowing && lineMaxGap(line) < columnGapThreshold) {
-            renderLineAsFlowing(lineIndex);
-            changed = true;
-          }
+      // Second pass: extend flowing to adjacent continuation lines using
+      // forward + backward sweeps (O(n) instead of iterating until convergence)
+      // Forward sweep: propagate flowing status downward
+      for (let lineIndex = block.start; lineIndex < block.end; lineIndex++) {
+        if (flowingLines.has(lineIndex)) continue;
+        const line = lines[lineIndex];
+        if (line.length === 0) continue;
+        if (flowingLines.has(lineIndex - 1) && lineMaxGap(line) < columnGapThreshold) {
+          markFlowing(lineIndex);
+        }
+      }
+      // Backward sweep: propagate flowing status upward
+      for (let lineIndex = block.end - 1; lineIndex >= block.start; lineIndex--) {
+        if (flowingLines.has(lineIndex)) continue;
+        const line = lines[lineIndex];
+        if (line.length === 0) continue;
+        if (flowingLines.has(lineIndex + 1) && lineMaxGap(line) < columnGapThreshold) {
+          markFlowing(lineIndex);
         }
       }
     }
