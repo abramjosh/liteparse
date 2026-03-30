@@ -164,7 +164,10 @@ function getResolvedPathFromOutput(output: string, useLastLine = false): string 
 async function resolveCommandPath(command: string): Promise<string | null> {
   try {
     if (process.platform === "win32") {
-      const output = await executePowerShell(`(Get-Command '${command}' -ErrorAction Stop).Source`, 5000);
+      const output = await executePowerShell(
+        `(Get-Command '${command}' -ErrorAction Stop).Source`,
+        5000
+      );
       return getResolvedPathFromOutput(output, true);
     }
 
@@ -210,9 +213,9 @@ async function isPathExecutable(filePath: string): Promise<boolean> {
 
 function isWindowsSystemConvert(filePath: string): boolean {
   const normalizedPath = path.win32.normalize(filePath).toLowerCase();
-  const system32Convert = path.win32.normalize(
-    path.join(process.env.SystemRoot || "C:\\Windows", "System32", "convert.exe")
-  ).toLowerCase();
+  const system32Convert = path.win32
+    .normalize(path.join(process.env.SystemRoot || "C:\\Windows", "System32", "convert.exe"))
+    .toLowerCase();
   return normalizedPath === system32Convert;
 }
 
@@ -225,13 +228,19 @@ async function isImageMagickBinary(executablePath: string, args: string[] = []):
   }
 }
 
-async function resolveImageMagickCommand(command: "magick" | "convert"): Promise<ResolvedCommand | null> {
+async function resolveImageMagickCommand(
+  command: "magick" | "convert"
+): Promise<ResolvedCommand | null> {
   const resolvedPath = await resolveCommandPath(command);
   if (!resolvedPath) {
     return null;
   }
 
-  if (command === "convert" && process.platform === "win32" && isWindowsSystemConvert(resolvedPath)) {
+  if (
+    command === "convert" &&
+    process.platform === "win32" &&
+    isWindowsSystemConvert(resolvedPath)
+  ) {
     return null;
   }
 
@@ -286,7 +295,9 @@ export async function findLibreOfficeCommand(): Promise<string | null> {
  * Find ImageMagick command - handles v6 (convert) and v7 (magick)
  */
 export async function findImageMagickCommand(): Promise<ResolvedCommand | null> {
-  return (await resolveImageMagickCommand("magick")) ?? (await resolveImageMagickCommand("convert"));
+  return (
+    (await resolveImageMagickCommand("magick")) ?? (await resolveImageMagickCommand("convert"))
+  );
 }
 
 /**

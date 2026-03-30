@@ -128,10 +128,7 @@ function enqueueLibreOfficeLookup(): void {
 }
 
 function enqueueImageMagickLookup(): void {
-  enqueueSpawnPlans(
-    { stdout: imageMagickPath, code: 0 },
-    { stdout: imageMagickVersion, code: 0 }
-  );
+  enqueueSpawnPlans({ stdout: imageMagickPath, code: 0 }, { stdout: imageMagickVersion, code: 0 });
 }
 
 vi.mock("child_process", () => ({
