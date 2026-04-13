@@ -1115,7 +1115,13 @@ function updateForwardAnchorRightBound(
         const oldValue = forwardAnchor[anchor];
         forwardAnchor[anchor] = anchorTarget;
         logger.logForwardAnchorMutation(
-          triggerText, triggerLineIndex, snapType, anchor, oldValue, anchorTarget, rightBound
+          triggerText,
+          triggerLineIndex,
+          snapType,
+          anchor,
+          oldValue,
+          anchorTarget,
+          rightBound
         );
       }
       // Also update nearby positions within tolerance
@@ -1126,7 +1132,13 @@ function updateForwardAnchorRightBound(
           const oldValue = forwardAnchor[nearbyAnchor];
           forwardAnchor[nearbyAnchor] = anchorTarget;
           logger.logForwardAnchorMutation(
-            triggerText, triggerLineIndex, snapType, nearbyAnchor, oldValue, anchorTarget, rightBound
+            triggerText,
+            triggerLineIndex,
+            snapType,
+            nearbyAnchor,
+            oldValue,
+            anchorTarget,
+            rightBound
           );
         }
       }
@@ -1151,12 +1163,37 @@ function updateForwardAnchors(
     targetLength += nextBbox.shouldSpace ?? 0;
   }
   const triggerText = bbox.str;
-  updateForwardAnchorRightBound(snapMaps.left, forwardAnchors.left, rightBound, targetLength, logger, triggerText, lineIndex, "left");
-  updateForwardAnchorRightBound(snapMaps.right, forwardAnchors.right, rightBound, targetLength, logger, triggerText, lineIndex, "right");
+  updateForwardAnchorRightBound(
+    snapMaps.left,
+    forwardAnchors.left,
+    rightBound,
+    targetLength,
+    logger,
+    triggerText,
+    lineIndex,
+    "left"
+  );
+  updateForwardAnchorRightBound(
+    snapMaps.right,
+    forwardAnchors.right,
+    rightBound,
+    targetLength,
+    logger,
+    triggerText,
+    lineIndex,
+    "right"
+  );
 
   // we do not update center anchors since centered text may span between snapped columns
   updateForwardAnchorRightBound(
-    snapMaps.floating, forwardAnchors.floating, rightBound, targetLength, logger, triggerText, lineIndex, "floating"
+    snapMaps.floating,
+    forwardAnchors.floating,
+    rightBound,
+    targetLength,
+    logger,
+    triggerText,
+    lineIndex,
+    "floating"
   );
 }
 
@@ -1679,15 +1716,14 @@ export function projectToGrid(
             }
           }
           const rawLineTrimLength = rawLines[lineIndex].trimEnd().length;
-          const lineMax = Math.max(
-            lastSnapLeft,
-            rawLineTrimLength + (bbox.shouldSpace ?? 0)
-          );
+          const lineMax = Math.max(lastSnapLeft, rawLineTrimLength + (bbox.shouldSpace ?? 0));
           let bindingConstraint = "COLUMN_SPACES";
           if (targetX < lineMax) {
             targetX = lineMax;
-            bindingConstraint = lastSnapLeft >= rawLineTrimLength + (bbox.shouldSpace ?? 0)
-              ? "lastSnapLeft" : "lineMax";
+            bindingConstraint =
+              lastSnapLeft >= rawLineTrimLength + (bbox.shouldSpace ?? 0)
+                ? "lastSnapLeft"
+                : "lineMax";
           }
 
           let floatingAnchorBump: number | undefined;
@@ -1798,18 +1834,12 @@ export function projectToGrid(
         }
 
         const leftForwardAnchorValue = forwardAnchors.left[snapMaps.left[0]];
-        if (
-          leftForwardAnchorValue &&
-          targetX < leftForwardAnchorValue
-        ) {
+        if (leftForwardAnchorValue && targetX < leftForwardAnchorValue) {
           targetX = leftForwardAnchorValue;
           leftBindingConstraint = "forwardAnchor";
         }
         const leftPrevAnchorValue = prevAnchors.forwardAnchorLeft[snapMaps.left[0]];
-        if (
-          leftPrevAnchorValue &&
-          targetX < leftPrevAnchorValue
-        ) {
+        if (leftPrevAnchorValue && targetX < leftPrevAnchorValue) {
           targetX = leftPrevAnchorValue;
           leftBindingConstraint = "prevAnchor";
         }
@@ -1896,10 +1926,11 @@ export function projectToGrid(
               lastSnapLeft = Math.max(lastSnapLeft, forwardAnchors.left[key]);
             }
           }
-          const value = Math.max(
-            lastSnapLeft,
-            rawLines[v.lineIndex].trimEnd().length + (v.bbox.shouldSpace ?? 0)
-          ) + v.bbox.strLength;
+          const value =
+            Math.max(
+              lastSnapLeft,
+              rawLines[v.lineIndex].trimEnd().length + (v.bbox.shouldSpace ?? 0)
+            ) + v.bbox.strLength;
           return {
             text: v.bbox.str.substring(0, 30),
             lineIndex: v.lineIndex,
@@ -1908,9 +1939,7 @@ export function projectToGrid(
             value,
           };
         });
-        const lineMax = Math.max(
-          ...allRightCandidates.map((c) => c.value)
-        );
+        const lineMax = Math.max(...allRightCandidates.map((c) => c.value));
 
         let rightBindingConstraint = "COLUMN_SPACES";
         if (targetX < lineMax) {
@@ -1918,18 +1947,12 @@ export function projectToGrid(
           rightBindingConstraint = "lineMax";
         }
         const rightForwardAnchorValue = forwardAnchors.right[snapMaps.right[0]];
-        if (
-          rightForwardAnchorValue &&
-          targetX < rightForwardAnchorValue
-        ) {
+        if (rightForwardAnchorValue && targetX < rightForwardAnchorValue) {
           targetX = rightForwardAnchorValue;
           rightBindingConstraint = "forwardAnchor";
         }
         const rightPrevAnchorValue = prevAnchors.forwardAnchorRight[snapMaps.right[0]];
-        if (
-          rightPrevAnchorValue &&
-          targetX < rightPrevAnchorValue
-        ) {
+        if (rightPrevAnchorValue && targetX < rightPrevAnchorValue) {
           targetX = rightPrevAnchorValue;
           rightBindingConstraint = "prevAnchor";
         }
@@ -2037,18 +2060,12 @@ export function projectToGrid(
           centerBindingConstraint = "lineMax";
         }
         const centerForwardAnchorValue = forwardAnchors.center[snapMaps.center[0]];
-        if (
-          centerForwardAnchorValue &&
-          targetX < centerForwardAnchorValue
-        ) {
+        if (centerForwardAnchorValue && targetX < centerForwardAnchorValue) {
           targetX = centerForwardAnchorValue;
           centerBindingConstraint = "forwardAnchor";
         }
         const centerPrevAnchorValue = prevAnchors.forwardAnchorCenter[snapMaps.center[0]];
-        if (
-          centerPrevAnchorValue &&
-          targetX < centerPrevAnchorValue
-        ) {
+        if (centerPrevAnchorValue && targetX < centerPrevAnchorValue) {
           targetX = centerPrevAnchorValue;
           centerBindingConstraint = "prevAnchor";
         }

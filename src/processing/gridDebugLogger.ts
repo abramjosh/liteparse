@@ -441,11 +441,7 @@ export class GridDebugLogger {
   }
 
   /** Log full render decision trace for a single item */
-  logRenderTrace(
-    bbox: ProjectionTextBox,
-    lineIndex: number,
-    ctx: RenderTraceContext
-  ): void {
+  logRenderTrace(bbox: ProjectionTextBox, lineIndex: number, ctx: RenderTraceContext): void {
     if (!this.config.trace || !this.matchesBbox(bbox, lineIndex)) return;
 
     const lines: string[] = [];
@@ -462,12 +458,16 @@ export class GridDebugLogger {
       lines.push(`  lineMax: ${ctx.lineMax} from ${ctx.lineMaxCandidates.length} candidates:`);
       for (const c of ctx.lineMaxCandidates) {
         const mark = c.filtered ? " [FILTERED: single-item line]" : "";
-        lines.push(`    L${c.lineIndex} "${c.text}" → ${c.value} (lineItems=${c.lineItemCount})${mark}`);
+        lines.push(
+          `    L${c.lineIndex} "${c.text}" → ${c.value} (lineItems=${c.lineItemCount})${mark}`
+        );
       }
     } else {
       const parts: string[] = [];
       if (ctx.lastSnapLeft !== undefined && ctx.lastSnapLeft > 0) {
-        parts.push(`lastSnapLeft=${ctx.lastSnapLeft}${ctx.lastSnapLeftKey !== undefined ? ` (from left@${round2(ctx.lastSnapLeftKey)})` : ""}`);
+        parts.push(
+          `lastSnapLeft=${ctx.lastSnapLeft}${ctx.lastSnapLeftKey !== undefined ? ` (from left@${round2(ctx.lastSnapLeftKey)})` : ""}`
+        );
       }
       parts.push(`rawLine.trimEnd=${ctx.rawLineTrimLength}`);
       if (ctx.shouldSpace > 0) parts.push(`shouldSpace=${ctx.shouldSpace}`);
