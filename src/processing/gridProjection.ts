@@ -1145,15 +1145,9 @@ function updateForwardAnchors(
   logger: GridDebugLogger,
   lineIndex: number
 ): void {
-  // If this is the last item on the line (no nextBbox), don't propagate
-  // forward anchors. There's nothing to the right on this line that needs
-  // overlap protection, and propagating would let single-column text
-  // (e.g. footnotes) inflate distant data column positions.
-  if (!nextBbox) return;
-
   const rightBound = bbox.x + bbox.w;
   let targetLength = lineLength;
-  if ((nextBbox.shouldSpace ?? 0) > 0) {
+  if (nextBbox && (nextBbox.shouldSpace ?? 0) > 0) {
     targetLength += nextBbox.shouldSpace ?? 0;
   }
   const triggerText = bbox.str;
@@ -1485,17 +1479,6 @@ export function projectToGrid(
     const rightSnap: Snap[] = [];
     const centerSnap: Snap[] = [];
 
-    // Track left anchors with very few items. These are likely coincidental
-    // header alignments, not structural column boundaries. They should not
-    // propagate forward anchors that force subsequent columns rightward.
-    const MIN_LEFT_ANCHOR_ITEMS = 3;
-    const sparseLeftAnchors = new Set<number>();
-    for (const snap in anchorLeft) {
-      if (anchorLeft[snap].length < MIN_LEFT_ANCHOR_ITEMS) {
-        sparseLeftAnchors.add(parseFloat(snap));
-      }
-    }
-
     if (!config.preserveLayoutAlignmentAcrossPages) {
       const sizes = getMedianTextBoxSize(lines.slice(block.start, block.end).flat());
       medianWidth = sizes.width;
@@ -1504,7 +1487,7 @@ export function projectToGrid(
       void sizes.height;
     }
 
-    logger.logBlockContext(block.start, block.end, medianWidth, sparseLeftAnchors);
+    logger.logBlockContext(block.start, block.end, medianWidth, new Set());
 
     // compute snaps
     for (let lineIndex = block.start; lineIndex < block.end; ++lineIndex) {
@@ -1688,11 +1671,10 @@ export function projectToGrid(
           let lastSnapLeftKey: number | undefined;
           for (const key in forwardAnchors.left) {
             // Use parseFloat to preserve decimal precision from anchor keys
-            const keyVal = parseFloat(key);
-            if (keyVal <= bbox.x && !sparseLeftAnchors.has(keyVal)) {
+            if (parseFloat(key) <= bbox.x) {
               if (forwardAnchors.left[key] > lastSnapLeft) {
                 lastSnapLeft = forwardAnchors.left[key];
-                lastSnapLeftKey = keyVal;
+                lastSnapLeftKey = parseFloat(key);
               }
             }
           }
@@ -1706,20 +1688,6 @@ export function projectToGrid(
             targetX = lineMax;
             bindingConstraint = lastSnapLeft >= rawLineTrimLength + (bbox.shouldSpace ?? 0)
               ? "lastSnapLeft" : "lineMax";
-          }
-
-          // For floating items on lines with no rendered content (only block
-          // padding spaces), use the PDF coordinate position. This prevents
-          // header text on lines without snapped items from collapsing to
-          // the left margin.
-          let usedPdfFallback = false;
-          if (rawLines[lineIndex].trimEnd().length === 0) {
-            const pdfTargetX = Math.round(bbox.x / medianWidth);
-            if (pdfTargetX > targetX) {
-              targetX = pdfTargetX;
-              usedPdfFallback = true;
-              bindingConstraint = "pdfFallback";
-            }
           }
 
           let floatingAnchorBump: number | undefined;
@@ -1747,8 +1715,6 @@ export function projectToGrid(
             lastSnapLeftKey,
             rawLineTrimLength,
             shouldSpace: bbox.shouldSpace ?? 0,
-            pdfFallbackUsed: usedPdfFallback || undefined,
-            pdfFallbackTargetX: usedPdfFallback ? targetX : undefined,
             floatingAnchorBump,
             finalTargetX: targetX,
             bindingConstraint,
@@ -1770,7 +1736,7 @@ export function projectToGrid(
           if (line.length > boxIndex + 1) {
             nextBbox = line[boxIndex + 1];
           }
-          if (!bbox.forceUnsnapped && !usedPdfFallback) {
+          if (!bbox.forceUnsnapped) {
             updateForwardAnchors(
               bbox,
               nextBbox,
@@ -1799,7 +1765,6 @@ export function projectToGrid(
             thisTurnSnap.push(item);
           }
         }
-        const isSparseAnchor = sparseLeftAnchors.has(snapMaps.left[0]);
         hasChanged = true;
         if (!thisTurnSnap.length) {
           snapMaps.left.shift();
@@ -1849,9 +1814,7 @@ export function projectToGrid(
           leftBindingConstraint = "prevAnchor";
         }
 
-        if (!isSparseAnchor) {
-          forwardAnchors.left[snapMaps.left[0]] = targetX;
-        }
+        forwardAnchors.left[snapMaps.left[0]] = targetX;
         logger.logForwardAnchor("left", snapMaps.left[0], targetX);
 
         for (const currentLeftSnapBox of thisTurnSnap) {
@@ -1867,7 +1830,6 @@ export function projectToGrid(
             shouldSpace: currentLeftSnapBox.bbox.shouldSpace ?? 0,
             forwardAnchorValue: leftForwardAnchorValue || undefined,
             prevAnchorValue: leftPrevAnchorValue || undefined,
-            isSparseAnchor: isSparseAnchor || undefined,
             finalTargetX: targetX,
             bindingConstraint: leftBindingConstraint,
           });
@@ -1884,29 +1846,22 @@ export function projectToGrid(
           if (lines[lineIndex].length > currentLeftSnapBox.boxIndex + 1) {
             nextBbox = lines[lineIndex][currentLeftSnapBox.boxIndex + 1];
           }
-          // Don't propagate forward anchors from sparse left anchors —
-          // they would force all subsequent columns rightward based on
-          // a coincidental header alignment, not a structural column boundary.
-          if (!isSparseAnchor) {
-            updateForwardAnchors(
-              currentLeftSnapBox.bbox,
-              nextBbox,
-              snapMaps,
-              forwardAnchors,
-              rawLines[lineIndex].length,
-              logger,
-              lineIndex
-            );
-          }
+          updateForwardAnchors(
+            currentLeftSnapBox.bbox,
+            nextBbox,
+            snapMaps,
+            forwardAnchors,
+            rawLines[lineIndex].length,
+            logger,
+            lineIndex
+          );
         }
 
-        if (!isSparseAnchor) {
-          for (let index = block.start; index < block.end; ++index) {
-            if (flowingLines.has(index)) continue;
-            const line = rawLines[index];
-            if (line.length < targetX) {
-              rawLines[index] += " ".repeat(targetX - line.length);
-            }
+        for (let index = block.start; index < block.end; ++index) {
+          if (flowingLines.has(index)) continue;
+          const line = rawLines[index];
+          if (line.length < targetX) {
+            rawLines[index] += " ".repeat(targetX - line.length);
           }
         }
         snapMaps.left.shift();
@@ -1934,15 +1889,10 @@ export function projectToGrid(
 
         const rightInitialTargetX = Math.round(snapMaps.right[0] / medianWidth);
         let targetX = Math.min(rightInitialTargetX, COLUMN_SPACES);
-        // Filter out single-item lines from lineMax: full-width text (footnotes,
-        // titles) that coincidentally matches this right anchor shouldn't inflate
-        // the column position for actual data values.
         const allRightCandidates = thisTurnSnap.map((v) => {
-          const isSingleItem = lines[v.lineIndex].length <= 1;
           let lastSnapLeft = 0;
           for (const key in forwardAnchors.left) {
-            const keyVal = parseFloat(key);
-            if (keyVal <= v.bbox.x && !sparseLeftAnchors.has(keyVal)) {
+            if (parseInt(key) <= v.bbox.x) {
               lastSnapLeft = Math.max(lastSnapLeft, forwardAnchors.left[key]);
             }
           }
@@ -1954,16 +1904,13 @@ export function projectToGrid(
             text: v.bbox.str.substring(0, 30),
             lineIndex: v.lineIndex,
             lineItemCount: lines[v.lineIndex].length,
-            filtered: isSingleItem,
+            filtered: false,
             value,
           };
         });
-        const lineMaxCandidates = allRightCandidates
-          .filter((c) => !c.filtered)
-          .map((c) => c.value);
-        const lineMax = lineMaxCandidates.length > 0
-          ? Math.max(...lineMaxCandidates)
-          : 0;
+        const lineMax = Math.max(
+          ...allRightCandidates.map((c) => c.value)
+        );
 
         let rightBindingConstraint = "COLUMN_SPACES";
         if (targetX < lineMax) {
