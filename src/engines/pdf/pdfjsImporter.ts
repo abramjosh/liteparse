@@ -42,5 +42,6 @@ export async function importPdfJs() {
   return {
     fn: pdfjs.getDocument,
     dir: dirPath,
+    VerbosityLevel: pdfjs.VerbosityLevel,
   };
 }
